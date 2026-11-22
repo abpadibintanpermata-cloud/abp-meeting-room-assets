@@ -1,7 +1,7 @@
 // KONFIGURASI PUBLIK FIREBASE ABP MEETING ROOM
 
 var ABP_FIREBASE_CONFIG = {
-  apiKey: 'AIzaSyBu0L7ykJRCbmctBR65TQ6f1A7aACKkHx4',
+  apiKey: 'AIzaSyBuOL7ykJRCbmctBR65TQ6flA7aACKkHx4',
   authDomain: 'abp-meeting-room-notifications.firebaseapp.com',
   projectId: 'abp-meeting-room-notifications',
   storageBucket: 'abp-meeting-room-notifications.firebasestorage.app',
