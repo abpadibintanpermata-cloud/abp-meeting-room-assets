@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aktivasi Notifikasi ABP</title>
+<style>
+:root{font-family:Arial,Helvetica,sans-serif;color:#17365D;background:#F4F7FB}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px}.panel{width:min(100%,440px);background:#fff;border:1px solid #DCE5EF;border-radius:20px;padding:28px;box-shadow:0 16px 42px rgba(23,54,93,.12)}.brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}.logo{width:44px;height:44px;display:grid;place-items:center;border-radius:12px;background:#17365D;color:#fff;font-weight:900;font-size:14px}.brand strong{display:block;font-size:15px}.brand small{display:block;color:#748399;font-size:11px;margin-top:3px}.tag{display:inline-block;border-radius:99px;background:#EAF1FA;color:#17365D;padding:5px 10px;font-weight:700;font-size:10px}.panel h1{font-size:22px;line-height:1.25;margin:13px 0 8px}.panel p{color:#65768B;font-size:13px;line-height:1.65}.button{width:100%;border:0;border-radius:11px;background:#17365D;color:#fff;padding:13px 16px;font-size:13px;font-weight:800;cursor:pointer;margin-top:14px}.button:disabled{opacity:.6;cursor:wait}.status{margin-top:14px;padding:11px 12px;border-radius:10px;background:#F2F5F8;color:#64748B;font-size:11px;line-height:1.55}.status.ok{background:#E9F7F0;color:#176B48}.status.err{background:#FFF0F0;color:#9B2525}.hint{font-size:10px!important;margin-top:14px!important}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
+<script src="./firebase-config.js"></script>
+</head>
+<body>
+<main class="panel">
+  <div class="brand"><div class="logo">ABP</div><div><strong>ABP Meeting Room</strong><small>Desktop Notification Setup</small></div></div>
+  <span class="tag">Persetujuan per perangkat</span>
+  <h1>Aktifkan Notifikasi Desktop</h1>
+  <p>Izinkan browser ini menampilkan notifikasi booking baru ABP di desktop, termasuk ketika Anda sedang menggunakan aplikasi lain.</p>
+  <button class="button" id="enableBtn" type="button">Izinkan Notifikasi</button>
+  <div class="status" id="statusBox">Klik tombol di atas untuk memberikan persetujuan pada browser ini.</div>
+  <p class="hint">Notifikasi hanya dikirim ke perangkat yang sudah memberi izin. Anda dapat menonaktifkannya kembali melalui ikon lonceng di ABP Meeting Room.</p>
+</main>
+<script>
+const statusBox=document.getElementById('statusBox');
+const enableBtn=document.getElementById('enableBtn');
+function setStatus(message,type){statusBox.textContent=message;statusBox.className='status'+(type?' '+type:'');}
+function sendToAbp(message){if(window.opener&&!window.opener.closed){window.opener.postMessage(message,'*');return true;}setStatus('Halaman ini tidak dibuka dari tombol lonceng ABP. Tutup tab ini dan ulangi dari website ABP.','err');return false;}
+function isConfigReady(){return ABP_FIREBASE_CONFIG&&ABP_FIREBASE_CONFIG.apiKey!=='ISI_FIREBASE_API_KEY'&&ABP_FIREBASE_CONFIG.projectId!=='ISI_PROJECT_ID'&&ABP_FIREBASE_VAPID_KEY!=='ISI_PUBLIC_VAPID_KEY';}
+enableBtn.addEventListener('click',async function(){
+  enableBtn.disabled=true;enableBtn.textContent='Memproses...';
+  try{
+    if(!isConfigReady())throw new Error('Konfigurasi Firebase belum diisi. Hubungi Admin GA untuk menyelesaikan konfigurasi terlebih dahulu.');
+    if(!('Notification' in window))throw new Error('Browser ini belum mendukung desktop notification. Gunakan Chrome atau Microsoft Edge versi terbaru.');
+    const permission=await Notification.requestPermission();
+    if(permission!=='granted')throw new Error(permission==='denied'?'Izin notifikasi ditolak. Ubah izin situs GitHub Pages menjadi Allow dari pengaturan browser.':'Izin notifikasi belum diberikan.');
+    if(!('serviceWorker' in navigator))throw new Error('Service Worker tidak didukung oleh browser ini.');
+    if(!firebase.apps.length) firebase.initializeApp(ABP_FIREBASE_CONFIG);
+    const messaging=firebase.messaging();
+    const swRegistration=await navigator.serviceWorker.register('./firebase-messaging-sw.js',{scope:'./'});
+    const fcmToken=await messaging.getToken({vapidKey:ABP_FIREBASE_VAPID_KEY,serviceWorkerRegistration:swRegistration});
+    if(!fcmToken)throw new Error('Browser tidak memberikan token FCM. Coba ulangi aktivasi.');
+    setStatus('Izin browser berhasil. Mengirim pendaftaran perangkat ke ABP...','ok');
+    if(!window._abpSaveListenerInstalled){
+      window._abpSaveListenerInstalled=true;
+      window.addEventListener('message',function(event){
+        if(event.origin!=='https://script.google.com' && !String(event.origin||'').includes('script.googleusercontent.com'))return;
+        if(event.source!==window.opener)return;
+        const data=event.data||{};
+        if(data.type==='ABP_PUSH_SAVE_RESULT'){
+          if(data.success){setStatus('Berhasil! Perangkat ini sudah terdaftar menerima notifikasi booking ABP. Anda dapat menutup tab ini.','ok');enableBtn.textContent='Notifikasi Aktif';}
+          else {setStatus(data.message||'Pendaftaran perangkat ke ABP gagal.','err');enableBtn.disabled=false;enableBtn.textContent='Coba Lagi';}
+        }
+      });
+    }
+    if(!sendToAbp({type:'ABP_PUSH_TOKEN',token:fcmToken,deviceLabel:(navigator.userAgent||'Browser desktop').slice(0,240)}))return;
+  }catch(error){setStatus(error&&error.message?error.message:String(error),'err');enableBtn.disabled=false;enableBtn.textContent='Coba Lagi';sendToAbp({type:'ABP_PUSH_SETUP_ERROR',message:error&&error.message?error.message:String(error)});}
+});
+</script>
+</body>
+</html>
